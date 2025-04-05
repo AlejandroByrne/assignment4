@@ -6,6 +6,7 @@ import unittest
 
 from .common import (
     SYN_MASK,
+    ACK_MASK,
     TIMEOUT,
     UTTCP,
     check_packet_is_valid_synack,

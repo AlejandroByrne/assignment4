@@ -79,16 +79,66 @@
    return dying;
  }
 
- void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
- {
-   /*
+void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
+{
+    /*
    TODOs:
    * The `handle_pkt_handshake` function processes TCP handshake packets for a given socket.
-   * It first extracts the flags from the TCP header and determines whether the socket is an initiator or a listener.
+   * DONE It first extracts the flags from the TCP header and determines whether the socket is an initiator or a listener.
    * If the socket is an initiator, it verifies the SYN-ACK response and updates the send and receive windows accordingly.
    * If the socket is a listener, it handles incoming SYN packets and ACK responses, updating the socket’s state and windows as needed.
    */
- }
+   uint8_t flags = get_flags(hdr);
+   uint32_t seq = get_seq(hdr);
+   uint32_t ack = get_ack(hdr);
+
+   if (sock->type == TCP_INITIATOR) { // Client side
+     if ((flags & SYN_FLAG_MASK) && (flags & ACK_FLAG_MASK)) {
+       // Step 2: Client receives SYN-ACK from server
+       sock->recv_win.next_expect = seq + 1;
+       sock->recv_win.last_read = seq;
+       sock->recv_win.last_recv = seq;
+
+       // Update send window
+       sock->send_win.last_ack = ack - 1;
+       sock->send_win.last_sent = ack - 1;
+       sock->send_win.last_write = ack - 1;
+
+       // Connection is now initialized
+       sock->send_syn = false;
+       sock->complete_init = true;
+
+       // Step 3: Send ACK to server
+       send_empty(sock, ACK_FLAG_MASK, false, false);
+     }
+   } else { // Server side
+     if ((flags & SYN_FLAG_MASK) && !(flags & ACK_FLAG_MASK)) {
+       // Step 1: Server receives SYN from client
+       sock->recv_win.next_expect = seq + 1;
+       sock->recv_win.last_read = seq;
+       sock->recv_win.last_recv = seq;
+
+       // Initialize send window
+       sock->send_win.last_ack = seq;
+       sock->send_win.last_sent = seq;
+       sock->send_win.last_write = seq;
+
+       // Mark connection as initialized
+       sock->complete_init = true;
+
+       // Step 2: Send SYN-ACK to client
+       send_empty(sock, SYN_FLAG_MASK | ACK_FLAG_MASK, false, false);
+     } 
+     else if (flags & ACK_FLAG_MASK) {
+       // Step 3: Server receives ACK from client
+       if (!after(ack - 1, sock->send_win.last_ack)) {
+         sock->send_win.last_ack = ack - 1;
+         sock->send_win.last_sent = ack - 1;
+         sock->send_win.last_write = ack - 1;
+       }
+     }
+   }
+}
 
  void handle_ack(ut_socket_t *sock, ut_tcp_header_t *hdr)
  {
