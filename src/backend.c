@@ -202,7 +202,7 @@ void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
      handle_pkt_handshake(sock, hdr);
      return;
    }
-     /*
+   /*
      TODOs:
      * Handle the FIN flag.
        * Mark the socket as having received a FIN, store the sequence number, and send an ACK response.
@@ -215,6 +215,36 @@ void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
          * If the ACK is for a new sequence, update the send window and congestion control (call `handle_ack`).
      * Update the receive buffer (call `update_received_buf`).
      */
+
+   // Handle FIN flag
+   if (flags & FIN_FLAG_MASK) {
+     // Mark that we received a FIN and store its sequence number
+     sock->recv_fin = true;
+     sock->recv_fin_seq = get_seq(hdr);
+     // Send ACK for the FIN
+     send_empty(sock, ACK_FLAG_MASK, true, false);
+   }
+
+   // Update advertised window
+   
+
+   // Handle ACK flag
+   if (flags & ACK_FLAG_MASK) {
+     uint32_t ack = get_ack(hdr);
+     
+     // Case 1: ACK after sending FIN
+     if (sock->dying && ack == sock->send_fin_seq + 1) {
+       sock->fin_acked = true;
+     }
+     
+     // Case 2: ACK after sending data
+     if (after(ack - 1, sock->send_win.last_ack)) {
+       handle_ack(sock, hdr);
+     }
+   }
+
+   // Update receive buffer
+   update_received_buf(sock, pkt);
  }
 
  void recv_pkts(ut_socket_t *sock)
