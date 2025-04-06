@@ -7,6 +7,7 @@ import unittest
 from .common import (
     SYN_MASK,
     ACK_MASK,
+    FIN_MASK,
     TIMEOUT,
     UTTCP,
     check_packet_is_valid_synack,
@@ -64,3 +65,63 @@ class TestCases(unittest.TestCase):
     # Feel free to add more test cases here!
     # def test_your_test_case(self):
     #     pass
+    def test_ack_numbers(self):
+        print("Test if ACK numbers are correct during handshake.")
+        server_port = get_free_port()
+        client_port = get_free_port()
+        
+        with launch_server(server_port):
+            # Send SYN packet
+            syn_pkt = UTTCP(plen=23, seq_num=1000, flags=SYN_MASK)
+            syn_ack_resp = sr1(syn_pkt, TIMEOUT, server_port, client_port)
+            
+            if syn_ack_resp is None:
+                print("Did not receive SYN-ACK response")
+                assert False
+                
+            # Check if ACK number is correct (should be SYN seq + 1)
+            expected_ack = syn_pkt[UTTCP].seq_num + 1
+            received_ack = get_ut(syn_ack_resp).ack_num
+            
+            if received_ack != expected_ack:
+                print(f"ACK number incorrect. Expected {expected_ack}, got {received_ack}")
+                assert False
+                
+            # Send ACK to complete handshake
+            ack_pkt = UTTCP(plen=23, seq_num=syn_ack_resp[UTTCP].ack_num, 
+                          ack_num=syn_ack_resp[UTTCP].seq_num + 1, flags=ACK_MASK)
+            sr1(ack_pkt, TIMEOUT, server_port, client_port)
+            
+            print("ACK numbers test passed")
+
+    def test_connection_termination(self):
+        print("Test if connection termination works correctly.")
+        server_port = get_free_port()
+        client_port = get_free_port()
+        
+        with launch_server(server_port):
+            # Complete three-way handshake first
+            syn_pkt = UTTCP(plen=23, seq_num=1000, flags=SYN_MASK)
+            syn_ack_resp = sr1(syn_pkt, TIMEOUT, server_port, client_port)
+            ack_pkt = UTTCP(plen=23, seq_num=syn_ack_resp[UTTCP].ack_num, 
+                          ack_num=syn_ack_resp[UTTCP].seq_num + 1, flags=ACK_MASK)
+            sr1(ack_pkt, TIMEOUT, server_port, client_port)
+            
+            # Send FIN packet
+            fin_pkt = UTTCP(plen=23, seq_num=syn_ack_resp[UTTCP].ack_num, 
+                          ack_num=syn_ack_resp[UTTCP].seq_num + 1, flags=FIN_MASK)
+            fin_ack_resp = sr1(fin_pkt, TIMEOUT, server_port, client_port)
+            
+            if fin_ack_resp is None:
+                print("Did not receive FIN-ACK response")
+                assert False
+                
+            # Check if FIN-ACK has correct sequence and acknowledgment numbers
+            expected_ack = fin_pkt[UTTCP].seq_num + 1
+            received_ack = get_ut(fin_ack_resp).ack_num
+            
+            if received_ack != expected_ack:
+                print(f"FIN-ACK number incorrect. Expected {expected_ack}, got {received_ack}")
+                assert False
+                
+            print("Connection termination test passed")
