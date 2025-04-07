@@ -17,6 +17,7 @@
 
  #include "ut_packet.h"
  #include "ut_tcp.h"
+ #include <assert.h>
 
  #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
  #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
@@ -191,6 +192,51 @@ void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
    * Send an acknowledgment if the packet arrives in order:
      * Use the `send_empty` function to send the acknowledgment.
    */
+
+   // Extract the TCP header and sequence number from the packet
+   ut_tcp_header_t *hdr = (ut_tcp_header_t *)pkt;
+   uint32_t seq = get_seq(hdr);
+   uint32_t plen = get_plen(hdr);
+   uint32_t hlen = get_hlen(hdr);
+   uint32_t payload_len = plen - hlen;
+   uint8_t *payload = pkt + hlen;
+
+   // Calculate the end of the data segment
+   uint32_t data_end = seq + payload_len;
+
+   // Check if we have space in the receive buffer
+   if (sock->received_len + payload_len > MAX_NETWORK_BUFFER) {
+      assert(false);
+       // Buffer is full, drop the packet
+       return;
+   }
+
+   // Check if this is an in-order packet
+   if (seq == sock->recv_win.next_expect) {
+      printf("This is an in-order packet\n");
+       // Calculate the offset in the receive buffer
+       uint32_t offset = seq - sock->recv_win.last_read - 1;
+       
+       // Copy the payload into the receive buffer
+       memcpy(sock->received_buf + offset, payload, payload_len);
+       
+       // Update the receive window
+       sock->recv_win.next_expect = data_end;
+       sock->recv_win.last_recv = MAX(sock->recv_win.last_recv, data_end - 1);
+       sock->received_len += payload_len;
+       
+       // Send acknowledgment
+       send_empty(sock, ACK_FLAG_MASK, false, false);
+       assert(false);
+   } else if (seq > sock->recv_win.next_expect) {
+      assert(false);
+       // Out-of-order packet, store it if we have space
+       uint32_t offset = seq - sock->recv_win.last_read - 1;
+       if (offset + payload_len <= MAX_NETWORK_BUFFER) {
+           memcpy(sock->received_buf + offset, payload, payload_len);
+           sock->recv_win.last_recv = MAX(sock->recv_win.last_recv, data_end - 1);
+       }
+   }
  }
 
  void handle_pkt(ut_socket_t *sock, uint8_t *pkt)
@@ -226,7 +272,7 @@ void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
    }
 
    // Update advertised window
-   sock->send_adv_win = MAX_NETWORK_BUFFER - sock->send_win.last_recv - sock->send_win.last_read;
+   sock->send_adv_win = MAX_NETWORK_BUFFER - sock->recv_win.last_recv - sock->recv_win.last_read;
    
 
    // Handle ACK flag
