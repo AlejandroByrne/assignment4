@@ -84,10 +84,41 @@
    /*
    TODOs:
    * The `handle_pkt_handshake` function processes TCP handshake packets for a given socket.
-   * It first extracts the flags from the TCP header and determines whether the socket is an initiator or a listener.
+   * DONE It first extracts the flags from the TCP header and determines whether the socket is an initiator or a listener.
    * If the socket is an initiator, it verifies the SYN-ACK response and updates the send and receive windows accordingly.
    * If the socket is a listener, it handles incoming SYN packets and ACK responses, updating the socket’s state and windows as needed.
    */
+
+   // REMEMBER: this function gets called after a packet has been received and the data has been read
+
+  uint8_t flags = get_flags(hdr);
+
+  if (sock->type == TCP_INITIATOR) { // assume we just sent the initial SYN
+    // verify the SYN-ACK response
+    assert((flags & (SYN_FLAG_MASK | ACK_FLAG_MASK)) ==
+    (SYN_FLAG_MASK | ACK_FLAG_MASK));
+    // update both windows
+    //update receive window with server’s ISN
+    sock->recv_win.next_expect = get_seq(hdr) + 1;
+    sock->recv_win.last_recv   = get_seq(hdr);
+
+    // slide our send window
+    sock->send_win.last_ack  = get_ack(hdr) - 1;
+    sock->send_adv_win       = get_adv_window(hdr);
+
+    // send the final ACK
+
+  } else { // only two cases, we know we're the listener in this case
+    // handle the incoming SYN or ACK responses.
+    
+    if (flags & SYN_FLAG_MASK) { // CASE 1: received a SYN
+      sock->recv_win.next_expect = get_seq(hdr) + 1;  // SYN consumes 1 byte
+      sock->recv_win.last_recv   = get_seq(hdr);
+
+    } else if (flags & ACK_FLAG_MASK) { // CASE 2: received the final ACK for the handshake
+      // do not have to set the complete_init flag, it should have already been sent
+    }
+  }
  }
 
  void handle_ack(ut_socket_t *sock, ut_tcp_header_t *hdr)
@@ -221,12 +252,29 @@
    * Implement the handshake initialization logic.
    * We provide an example of sending a SYN packet by the initiator below:
    */
+
+   // REMEMBER: this function gets called before the data has actually been sent/written
+
    if (sock->type == TCP_INITIATOR)
    {
-     if (sock->send_syn)
-     {
-       send_empty(sock, SYN_FLAG_MASK, false, false);
+     if (sock->send_syn) { // case 1: sending the first SYN
+        // set the initial sequence number:
+        uint32_t isn = rand();
+        sock->send_win.last_sent = isn - 1;
+        sock->send_win.last_ack = isn - 1;
+        sock->send_win.last_write = isn - 1;
+
+        send_empty(sock, SYN_FLAG_MASK, false, false);
+        sock->send_syn = false; // we've just sent a syn, if we need to send again, this will be turned on
+     } else { // case 2: sending the final ACK to complete the handshake, can start sending data after this
+        
+        // we can assume that this final ack will not be dropped, per #265 on Ed.
+        send_empty(sock, SYN_FLAG_MASK, false, false);
+        sock->complete_init = true;
      }
+   } else {
+    // have to send the syn+ack packet
+    send_empty(sock, SYN_FLAG_MASK || ACK_FLAG_MASK, false, false);
    }
  }
 
