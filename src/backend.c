@@ -206,7 +206,7 @@ void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
 
    // Check if we have space in the receive buffer
    if (sock->received_len + payload_len > MAX_NETWORK_BUFFER) {
-      assert(false);
+      //assert(false);
        // Buffer is full, drop the packet
        return;
    }
@@ -227,9 +227,9 @@ void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
        
        // Send acknowledgment
        send_empty(sock, ACK_FLAG_MASK, false, false);
-       assert(false);
+       //assert(false);
    } else if (seq > sock->recv_win.next_expect) {
-      assert(false);
+      //assert(false);
        // Out-of-order packet, store it if we have space
        uint32_t offset = seq - sock->recv_win.last_read - 1;
        if (offset + payload_len <= MAX_NETWORK_BUFFER) {
