@@ -21,7 +21,7 @@
 #define EXIT_FAILURE 1
 
 typedef struct {
-  uint32_t last_ack;
+  uint32_t last_ack; // last number byte we acknowledged (receiver interprets this as the ACK #)
   uint32_t last_sent;
   uint32_t last_write;
 } send_win_t;
