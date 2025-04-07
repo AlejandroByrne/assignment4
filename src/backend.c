@@ -14,6 +14,7 @@
  #include <sys/socket.h>
  #include <sys/types.h>
  #include <errno.h>
+ #include <assert.h>
 
  #include "ut_packet.h"
  #include "ut_tcp.h"
@@ -93,30 +94,38 @@
 
   uint8_t flags = get_flags(hdr);
 
-  if (sock->type == TCP_INITIATOR) { // assume we just sent the initial SYN
+  if (sock->type == TCP_INITIATOR) { // assume we just sent the initial SYN and are now receiving the SYN+ACK
     // verify the SYN-ACK response
+    printf("Initiator received the SYN+ACK\n");
     assert((flags & (SYN_FLAG_MASK | ACK_FLAG_MASK)) ==
     (SYN_FLAG_MASK | ACK_FLAG_MASK));
-    // update both windows
+
+    sock->send_syn = false;
+
     //update receive window with server’s ISN
-    sock->recv_win.next_expect = get_seq(hdr) + 1;
-    sock->recv_win.last_recv   = get_seq(hdr);
+    sock->recv_win.last_read = get_seq(hdr);
+    sock->recv_win.last_recv = get_seq(hdr);
+    sock->recv_win.next_expect = get_seq(hdr) + 1;  // SYN+ACK consumes 1 byte
 
     // slide our send window
-    sock->send_win.last_ack  = get_ack(hdr) - 1;
-    sock->send_adv_win       = get_adv_window(hdr);
-
-    // send the final ACK
 
   } else { // only two cases, we know we're the listener in this case
     // handle the incoming SYN or ACK responses.
-    
-    if (flags & SYN_FLAG_MASK) { // CASE 1: received a SYN
+    if ((flags & SYN_FLAG_MASK) == SYN_FLAG_MASK) { // CASE 1: received a SYN
+      printf("Listener received the initial SYN\n");
+      // update receive window
+      sock->recv_win.last_read = get_seq(hdr);
+      sock->recv_win.last_recv = get_seq(hdr);
       sock->recv_win.next_expect = get_seq(hdr) + 1;  // SYN consumes 1 byte
-      sock->recv_win.last_recv   = get_seq(hdr);
 
-    } else if (flags & ACK_FLAG_MASK) { // CASE 2: received the final ACK for the handshake
+      sock->send_syn = true;
+      // sending window should be updated in send_pkts_handshake()
+
+    } else if ((flags & ACK_FLAG_MASK) == ACK_FLAG_MASK) { // CASE 2: received the final ACK for the handshake
       // do not have to set the complete_init flag, it should have already been sent
+      printf("Listener got the final ack\n");
+      sock->complete_init = true;
+      sock->send_syn = false;
     }
   }
  }
@@ -253,28 +262,32 @@
    * We provide an example of sending a SYN packet by the initiator below:
    */
 
-   // REMEMBER: this function gets called before the data has actually been sent/written
+   // REMEMBER: this function gets called right before the data is actually sent/written
 
    if (sock->type == TCP_INITIATOR)
    {
      if (sock->send_syn) { // case 1: sending the first SYN
-        // set the initial sequence number:
-        uint32_t isn = rand();
-        sock->send_win.last_sent = isn - 1;
-        sock->send_win.last_ack = isn - 1;
-        sock->send_win.last_write = isn - 1;
+        // printf("initiator: %d\n", sock->send_win.last_sent);
+        printf("Initiator sending SYN\n");
 
-        send_empty(sock, SYN_FLAG_MASK, false, false);
-        sock->send_syn = false; // we've just sent a syn, if we need to send again, this will be turned on
+        send_empty(sock, SYN_FLAG_MASK, false, false); // send_win.last_sent + 1 happens here
      } else { // case 2: sending the final ACK to complete the handshake, can start sending data after this
-        
-        // we can assume that this final ack will not be dropped, per #265 on Ed.
-        send_empty(sock, SYN_FLAG_MASK, false, false);
+      printf("Initiator sending final ACK\n");
         sock->complete_init = true;
+        // we can assume that this final ack will not be dropped, per #265 on Ed.
+        send_empty(sock, ACK_FLAG_MASK, false, false);
      }
-   } else {
-    // have to send the syn+ack packet
-    send_empty(sock, SYN_FLAG_MASK || ACK_FLAG_MASK, false, false);
+   } else { // listener side, received the first SYN from the sender, now to send SYN+ACK
+    if (sock->send_syn) {
+      // have to send the syn+ack packet
+      printf("Listener sending SYN+ACK\n");
+      // printf("listener: %d\n", sock->send_win.last_sent);
+      uint32_t isn = (uint32_t) rand();
+      sock->send_win.last_sent = isn - 1;
+      sock->send_win.last_ack = isn - 1;
+      sock->send_win.last_write = 0;
+      send_empty(sock, SYN_FLAG_MASK | ACK_FLAG_MASK, false, false);
+    }
    }
  }
 
