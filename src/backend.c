@@ -17,6 +17,7 @@
 
  #include "ut_packet.h"
  #include "ut_tcp.h"
+ #include <assert.h>
 
  #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
  #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
@@ -88,6 +89,59 @@
    * If the socket is an initiator, it verifies the SYN-ACK response and updates the send and receive windows accordingly.
    * If the socket is a listener, it handles incoming SYN packets and ACK responses, updating the socket’s state and windows as needed.
    */
+
+  // extract flags from TCP and header
+  uint8_t flags = get_flags(hdr);
+
+  // if sock in an initiator
+  printf("Sock Type: %d\n", sock->type);
+  if (sock->type == TCP_INITIATOR) {
+    assert(false);
+    // receiving SYN-ACK packet
+    printf("This is another test\n\n");
+    if (flags & SYN_FLAG_MASK && flags & ACK_FLAG_MASK) {
+      assert(false); 
+      // update windows based on sequence and ack numbers
+      // update send window
+      sock->send_win.last_ack = get_ack(hdr) - 1;
+      sock->send_win.last_sent = get_seq(hdr) - 1;
+      sock->send_win.last_write = get_seq(hdr); // not to sure about this one. 
+
+      // update receive window
+      sock->recv_win.last_read = get_seq(hdr);
+      sock->recv_win.next_expect = get_ack(hdr);
+      sock->recv_win.last_recv = get_seq(hdr);   
+
+      // send ack
+      send_empty(sock, ACK_FLAG_MASK, false, false); 
+      
+    }
+  }
+
+
+  // if sock is a listener (server)
+  else if (sock->type == TCP_LISTENER) {
+    // if SYN packet has been received, send SYN-ACK (case 1)
+    if (flags & SYN_FLAG_MASK) {
+      
+
+      // initialize receiving window
+      sock->recv_win.last_read = 0;
+      sock->recv_win.next_expect = get_seq(hdr) + 1;  
+      sock->recv_win.last_recv = get_seq(hdr); // not sure about this one. 
+
+      // supposed to update last_sent whenever you send a new packet
+      // sock->send_win.last_sent 
+
+      // send SYN-ACK
+      printf("This is a test\n\n");
+      printf("Syn+ack mask: %x\n", SYN_FLAG_MASK | ACK_FLAG_MASK);
+
+      send_empty(sock, SYN_FLAG_MASK | ACK_FLAG_MASK, false, false); 
+      
+    }
+  }
+
  }
 
  void handle_ack(ut_socket_t *sock, ut_tcp_header_t *hdr)

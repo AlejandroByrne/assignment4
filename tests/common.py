@@ -68,6 +68,7 @@ def check_packet_is_valid_synack(pkt, expected_ack_num):
         return False
     if pkt.ack_num != expected_ack_num:
         print("SYNACK packet's ACK number is incorrect")
+        print(f"Expected: {expected_ack_num}, Got: {pkt.ack_num}")
         return False
     if pkt.plen != pkt.hlen or len(pkt) != pkt.hlen or len(pkt.payload) != 0:
         print("SYNACK packet has unexpected plen/payload")
