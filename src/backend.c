@@ -20,7 +20,7 @@
 
  #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
  #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-
+//
  void send_empty(ut_socket_t *sock, int s_flags, bool fin_ack, bool send_fin)
  {
    size_t conn_len = sizeof(sock->conn);
