@@ -4,6 +4,7 @@
 
 import unittest
 
+from scapy.all import Raw
 from .common import (
     SYN_MASK,
     ACK_MASK,
@@ -125,3 +126,65 @@ class TestCases(unittest.TestCase):
                 assert False
                 
             print("Connection termination test passed")
+    
+    def test_sliding_window_data_transfer(self):
+        print("Test sliding window implementation with data transfer.")
+        server_port = get_free_port()
+        client_port = get_free_port()
+        
+        # Test data to send
+        test_data = b"Hello, this is a test message for sliding window implementation!"
+        data_len = len(test_data)
+        
+        with launch_server(server_port):
+            # Complete three-way handshake
+            syn_pkt = UTTCP(plen=23, seq_num=1000, flags=SYN_MASK)
+            syn_ack_resp = sr1(syn_pkt, TIMEOUT, server_port, client_port)
+            ack_pkt = UTTCP(plen=23, seq_num=syn_ack_resp[UTTCP].ack_num, 
+                          ack_num=syn_ack_resp[UTTCP].seq_num + 1, flags=ACK_MASK)
+            sr1(ack_pkt, TIMEOUT, server_port, client_port)
+            
+            # Send data in multiple segments to test sliding window
+            # First segment
+            data_pkt1 = UTTCP(plen=23 + 20, seq_num=syn_ack_resp[UTTCP].ack_num,
+                            ack_num=syn_ack_resp[UTTCP].seq_num + 1, flags=ACK_MASK)
+            data_pkt1 = data_pkt1 / Raw(load=test_data[:20])
+            ack_resp1 = sr1(data_pkt1, TIMEOUT, server_port, client_port)
+            
+            # Verify first ACK
+            if ack_resp1 is None:
+                print("Did not receive ACK for first data segment")
+                assert False
+            if ack_resp1[UTTCP].ack_num != data_pkt1[UTTCP].seq_num + 20:
+                print(f"ACK number incorrect for first segment. Expected {data_pkt1[UTTCP].seq_num + 20}, got {ack_resp1[UTTCP].ack_num}")
+                assert False
+            
+            # Second segment
+            data_pkt2 = UTTCP(plen=23 + 20, seq_num=data_pkt1[UTTCP].seq_num + 20,
+                            ack_num=ack_resp1[UTTCP].seq_num, flags=ACK_MASK)
+            data_pkt2 = data_pkt2 / Raw(load=test_data[20:40])
+            ack_resp2 = sr1(data_pkt2, TIMEOUT, server_port, client_port)
+            
+            # Verify second ACK
+            if ack_resp2 is None:
+                print("Did not receive ACK for second data segment")
+                assert False
+            if ack_resp2[UTTCP].ack_num != data_pkt2[UTTCP].seq_num + 20:
+                print(f"ACK number incorrect for second segment. Expected {data_pkt2[UTTCP].seq_num + 20}, got {ack_resp2[UTTCP].ack_num}")
+                assert False
+            
+            # Final segment
+            data_pkt3 = UTTCP(plen=23 + (data_len - 40), seq_num=data_pkt2[UTTCP].seq_num + 20,
+                            ack_num=ack_resp2[UTTCP].seq_num, flags=ACK_MASK)
+            data_pkt3 = data_pkt3 / Raw(load=test_data[40:])
+            ack_resp3 = sr1(data_pkt3, TIMEOUT, server_port, client_port)
+            
+            # Verify final ACK
+            if ack_resp3 is None:
+                print("Did not receive ACK for final data segment")
+                assert False
+            if ack_resp3[UTTCP].ack_num != data_pkt3[UTTCP].seq_num + (data_len - 40):
+                print(f"ACK number incorrect for final segment. Expected {data_pkt3[UTTCP].seq_num + (data_len - 40)}, got {ack_resp3[UTTCP].ack_num}")
+                assert False
+            
+            print("Sliding window data transfer test passed")

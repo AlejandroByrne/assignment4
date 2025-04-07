@@ -86,7 +86,7 @@ void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
    * The `handle_pkt_handshake` function processes TCP handshake packets for a given socket.
    * DONE It first extracts the flags from the TCP header and determines whether the socket is an initiator or a listener.
    * If the socket is an initiator, it verifies the SYN-ACK response and updates the send and receive windows accordingly.
-   * If the socket is a listener, it handles incoming SYN packets and ACK responses, updating the socket’s state and windows as needed.
+   * If the socket is a listener, it handles incoming SYN packets and ACK responses, updating the socket's state and windows as needed.
    */
    uint8_t flags = get_flags(hdr);
    uint32_t seq = get_seq(hdr);
@@ -226,6 +226,7 @@ void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
    }
 
    // Update advertised window
+   sock->send_adv_win = MAX_NETWORK_BUFFER - sock->send_win.last_recv - sock->send_win.last_read;
    
 
    // Handle ACK flag
@@ -318,16 +319,95 @@ void handle_pkt_handshake(ut_socket_t *sock, ut_tcp_header_t *hdr)
      using the provided socket. It ensures that the data is sent within the constraints
      of the congestion window, advertised window, and maximum segment size (MSS).
 
-   TODOs:
-   * Calculate the available window size for sending data based on the congestion window,
-     advertised window, and the amount of data already sent.
-   * Iterate the following steps until the available window size is consumed in the sending buffer:
-     * Create and send packets with appropriate sequence and acknowledgment numbers,
-       ensuring the payload length does not exceed the available window or MSS.
-       * Refer to the send_empty function for guidance on creating and sending packets.
-     * Update the last sent sequence number after each packet is sent.
-   */
- }
+    TODOs:
+    * Calculate the available window size for sending data based on the congestion window,
+      advertised window, and the amount of data already sent.
+    * Iterate the following steps until the available window size is consumed in the sending buffer:
+      * Create and send packets with appropriate sequence and acknowledgment numbers,
+        ensuring the payload length does not exceed the available window or MSS.
+        * Refer to the send_empty function for guidance on creating and sending packets.
+      * Update the last sent sequence number after each packet is sent.
+    */
+    
+    // Calculate available window size
+    uint32_t available_window = MIN(sock->cong_win, sock->send_adv_win);
+    uint32_t bytes_to_send = sock->send_win.last_write - sock->send_win.last_sent;
+    uint32_t bytes_can_send = MIN(available_window, bytes_to_send);
+    
+    // If no data to send or window is full, return
+    if (bytes_to_send == 0 || bytes_can_send == 0) {
+        // If advertised window is 0, probe with one byte
+        if (sock->send_adv_win == 0 && bytes_to_send > 0) {
+            bytes_can_send = 1;
+        } else {
+            return;
+        }
+    }
+    
+    // Calculate how many full MSS segments we can send
+    uint32_t num_segments = bytes_can_send / MSS;
+    uint32_t remaining_bytes = bytes_can_send % MSS;
+    
+    // Send full MSS segments
+    for (uint32_t i = 0; i < num_segments; i++) {
+        uint32_t seq = sock->send_win.last_sent + 1;
+        uint32_t ack = sock->recv_win.next_expect;
+        
+        // Create and send packet
+        uint8_t *payload = sock->sending_buf + (seq - sock->send_win.last_ack - 1);
+        uint16_t payload_len = MSS;
+        
+        uint8_t *msg = create_packet(
+            sock->my_port,
+            ntohs(sock->conn.sin_port),
+            seq,
+            ack,
+            sizeof(ut_tcp_header_t),
+            sizeof(ut_tcp_header_t) + payload_len,
+            ACK_FLAG_MASK,
+            MAX(MSS, MAX_NETWORK_BUFFER - sock->received_len),
+            payload,
+            payload_len
+        );
+        
+        sendto(sock->socket, msg, sizeof(ut_tcp_header_t) + payload_len, 0,
+               (struct sockaddr *)&(sock->conn), sizeof(sock->conn));
+        free(msg);
+        
+        // Update last_sent
+        sock->send_win.last_sent += payload_len;
+    }
+    
+    // Send remaining bytes if any
+    if (remaining_bytes > 0) {
+        uint32_t seq = sock->send_win.last_sent + 1;
+        uint32_t ack = sock->recv_win.next_expect;
+        
+        // Create and send packet
+        uint8_t *payload = sock->sending_buf + (seq - sock->send_win.last_ack - 1);
+        uint16_t payload_len = remaining_bytes;
+        
+        uint8_t *msg = create_packet(
+            sock->my_port,
+            ntohs(sock->conn.sin_port),
+            seq,
+            ack,
+            sizeof(ut_tcp_header_t),
+            sizeof(ut_tcp_header_t) + payload_len,
+            ACK_FLAG_MASK,
+            MAX(MSS, MAX_NETWORK_BUFFER - sock->received_len),
+            payload,
+            payload_len
+        );
+        
+        sendto(sock->socket, msg, sizeof(ut_tcp_header_t) + payload_len, 0,
+               (struct sockaddr *)&(sock->conn), sizeof(sock->conn));
+        free(msg);
+        
+        // Update last_sent
+        sock->send_win.last_sent += payload_len;
+    }
+}
 
  void send_pkts(ut_socket_t *sock)
  {
