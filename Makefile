@@ -22,9 +22,11 @@ client: $(OBJS) $(SRC_DIR)/client.c
 
 tests/testing_client: $(OBJS)
 	$(CC) $(FLAGS) tests/testing_client.c -o tests/testing_client $(OBJS)
+	cp tests/testing_client $(KATHARA_SHARED_DIR)
 
 tests/testing_server: $(OBJS)
 	$(CC) $(FLAGS) tests/testing_server.c -o tests/testing_server $(OBJS)
+	cp tests/testing_server $(KATHARA_SHARED_DIR)
 
 test:
 	sudo -E python3 -m unittest tests/test_ack_packets.py

@@ -1,0 +1,25 @@
+You're encountering the CAST5 has been deprecated error because Scapy uses the cryptography library under the hood for certain operations like decryption or handling certain encrypted protocols, and a recent version of cryptography deprecated the CAST5 cipher.
+
+But here’s the key thing:
+
+You're not even using encryption in your script. The CAST5 warning/error likely stems from Scapy importing all crypto ciphers by default, not from your usage.
+✅ Fix Options
+🥇 Option 1: Ignore the Warning
+
+If it’s just a warning, and your graph still generates correctly:
+
+It’s safe to ignore for now.
+You can suppress it by running Python with warnings off:
+python3 -W ignore your_script.py
+🛠️ Option 2: Downgrade cryptography
+
+If it’s a hard error (breaking the script), downgrade the cryptography package to a version that still supports CAST5:
+
+pip install "cryptography<42.0.0"
+That should resolve the CAST5 issue while maintaining compatibility with Scapy.
+
+🧼 Option 3: Update Scapy (if it’s been patched)
+
+Scapy may have patched this already:
+
+pip install --upgrade scapy

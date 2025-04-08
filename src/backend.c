@@ -199,7 +199,7 @@
           /* enter Fast‑Recovery ---------------------------------- */
           sock->slow_start_thresh = sock->cong_win / 2;
           sock->cong_win          = sock->slow_start_thresh + 3 * MSS;
-          sock->cc_state          = CC_FR;
+          sock->cc_state          = CC_SS;
 
           /* Go‑back‑N retransmit the missing segment              */
           sock->send_win.last_sent = sock->send_win.last_ack;
