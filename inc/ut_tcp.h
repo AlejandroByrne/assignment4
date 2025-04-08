@@ -40,6 +40,11 @@ typedef enum {
   TCP_LISTENER = 1,
 } ut_socket_type_t;
 
+typedef enum { CC_SS,   /* slow‑start            */
+  CC_CA,   /* congestion‑avoidance  */
+  CC_FR }  /* fast‑recovery         */
+cc_state_t;
+
 /**
  * This structure holds the state of a socket. You may modify this structure as
  * you see fit to include any additional state you need for your implementation.
@@ -78,6 +83,8 @@ typedef struct {
   uint32_t cong_win;
   uint32_t send_adv_win;
   uint32_t slow_start_thresh;
+
+  cc_state_t cc_state;        // NEW: Reno state machine
 } ut_socket_t;
 
 /*
