@@ -235,7 +235,7 @@
       *  – Advances next_expect across any newly contiguous data.
       *  – Sends a cumulative ACK for every segment.
       */
-
+    
     /* --------------------- header parsing ------------------------ */
     ut_tcp_header_t *hdr = (ut_tcp_header_t *)pkt;
 
@@ -301,7 +301,10 @@
     if (needed > sock->received_len)
         sock->received_len = needed;
 
-    /* ----------- send cumulative ACK ----------------------------- */
+
+    printf("Read packet with %d SEQ\n", seq);  
+    print_window_information(sock);
+    /* --------    send_empty(sock, ACK_FLAG_MASK, false, false);--- */
     send_empty(sock, ACK_FLAG_MASK, false, false);
 }
   
@@ -346,15 +349,6 @@
            Even if the segment carries *no* payload, calling the helper
            is harmless—it will notice dlen == 0 and return.
        --------------------------------------------------------------- */
-    printf("Handle_pkt Window Data:\n");
-    printf("--Sending Window Data--\n");
-    printf("\tLast ack: %d\n", sock->send_win.last_ack);
-    printf("\tLast sent: %d\n", sock->send_win.last_sent);
-    printf("\tLast write: %d\n", sock->send_win.last_write);
-    printf("--Receiving Window Data--\n");
-    printf("\tLast read: %d\n", sock->recv_win.last_read);
-    printf("\next expected: %d\n", sock->recv_win.next_expect);
-    printf("\tLast recv: %d\n", sock->recv_win.last_recv);
     update_received_buf(sock, pkt);
  }
 
@@ -451,12 +445,7 @@
    } else { // listener side, received the first SYN from the sender, now to send SYN+ACK
     if (sock->send_syn) {
       // have to send the syn+ack packet
-      // printf("listener: %d\n", sock->send_win.last_sent);
       printf("Listener sending SYN+ACK seq: %d\n", sock->send_win.last_sent);
-      // uint32_t isn = (uint32_t) rand();
-      // sock->send_win.last_sent = isn - 1;
-      // sock->send_win.last_ack = isn - 1;
-      // sock->send_win.last_write = 0;
       send_empty(sock, SYN_FLAG_MASK | ACK_FLAG_MASK, false, false);
     }
    }
@@ -464,15 +453,6 @@
 
  void send_pkts_data(ut_socket_t *sock)
  {
-    printf("Send_pkts_data before updating values window data:\n");
-    printf("--Sending Window Data--\n");
-    printf("\tLast ack: %d\n", sock->send_win.last_ack);
-    printf("\tLast sent: %d\n", sock->send_win.last_sent);
-    printf("\tLast write: %d\n", sock->send_win.last_write);
-    printf("--Receiving Window Data--\n");
-    printf("\tLast read: %d\n", sock->recv_win.last_read);
-    printf("\next expected: %d\n", sock->recv_win.next_expect);
-    printf("\tLast recv: %d\n", sock->recv_win.last_recv);
    /*
    * Sends packets of data over a TCP connection.
    * This function handles the transmission of data packets over a TCP connection
@@ -489,7 +469,7 @@
      * Update the last sent sequence number after each packet is sent.
    */
 
-  // in order to calculate the available window size for sending data, we have to know how much data is currently in flight
+  // in order to calculate the available window size for sending dataprently in flight
   uint32_t in_flight = sock->send_win.last_sent - sock->send_win.last_ack;
   uint32_t win_limit = MIN(sock->cong_win, sock->send_adv_win);
 
@@ -539,6 +519,9 @@
 
       sendto(sockfd, msg, plen, 0,
              (struct sockaddr *)&(sock->conn), conn_len);
+      
+      printf("Sending packet with %d SEQ\n", seq);       
+      print_window_information(sock);
       free(msg);
 
       /* bookkeeping -------------------------------------------------- */
@@ -547,15 +530,7 @@
       to_push                   -= seg_len;
   }
 
-    printf("Send pkt data window data after updating values:\n");
-    printf("--Sending Window Data--\n");
-    printf("\tLast ack: %d\n", sock->send_win.last_ack);
-    printf("\tLast sent: %d\n", sock->send_win.last_sent);
-    printf("\tLast write: %d\n", sock->send_win.last_write);
-    printf("--Receiving Window Data--\n");
-    printf("\tLast read: %d\n", sock->recv_win.last_read);
-    printf("\next expected: %d\n", sock->recv_win.next_expect);
-    printf("\tLast recv: %d\n", sock->recv_win.last_recv);
+    
    
  }
 
@@ -616,4 +591,20 @@
    }
    pthread_exit(NULL);
    return NULL;
+  }
+
+   void print_window_information(ut_socket_t *sock){
+    if (sock->type == TCP_LISTENER){
+      printf("--Receiving Window Data--\n");
+     printf("\tLast packet read: %d\n", sock->recv_win.last_read);
+      printf("\tnext packet expected: %d\n", sock->recv_win.next_expect);
+      printf("\tLast packet recveived: %d\n", sock->recv_win.last_recv);
+    }
+    else{
+      printf("--Sending Window Data--\n");
+      printf("\tLast packet acked: %d\n", sock->send_win.last_ack);
+      printf("\tLast packet sent: %d\n", sock->send_win.last_sent);
+      printf("\tLast packet written: %d\n", sock->send_win.last_write);
+    }
+    
  }

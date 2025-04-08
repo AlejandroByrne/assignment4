@@ -20,7 +20,7 @@
    
    sleep(1);
  
-   fp = fopen("tests/custom.input", "rb");
+   fp = fopen("tests/custom.input", "r");
    if (fp == NULL) {
      perror("Error opening file");
      exit(EXIT_FAILURE);

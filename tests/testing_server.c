@@ -12,6 +12,8 @@
  #include "ut_tcp.h"
  
  #define BUF_SIZE 16000
+
+ // RUN: UT_TCP_ADDR=10.1.1.3 UT_TCP_PORT=8000 UT_TCP_FILE_SIZE=39450 ./testing_server
  
  /*
   * Param: sock - used for reading and writing to a connection
@@ -35,13 +37,18 @@
    assert(fp != NULL);
    for (int i = 0; i < 10000; i++) {
      n = ut_read(sock, buf, BUF_SIZE, NO_FLAG);
+    //  printf("read: %s\n", buf);
      if (n > 0) {
        // printf("Bytes read: %d | %s\n", n, buf);
        fwrite(buf, n, 1, fp);
      }
      total_n += n;
      if (total_n >= file_size_in_bytes) {
-       printf("total n greater than file size\n");
+        if (total_n == file_size_in_bytes) {
+          printf("total n equal to file size\n");
+        } else {
+          printf("total n greater than file size\n");
+        }
        break;
      }
      // printf("Num read bytes: %d\n", total_n);
