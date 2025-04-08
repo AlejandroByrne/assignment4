@@ -13,7 +13,7 @@
  
  #define BUF_SIZE 16000
 
- // RUN: UT_TCP_ADDR=10.1.1.3 UT_TCP_PORT=8000 UT_TCP_FILE_SIZE=39450 ./testing_server
+ // RUN: UT_TCP_ADDR=10.1.1.3 UT_TCP_PORT=8000 UT_TCP_FILE_SIZE=809340 ./testing_server
  
  /*
   * Param: sock - used for reading and writing to a connection

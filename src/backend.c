@@ -379,6 +379,7 @@
        * Adjust the send window for retransmission of lost packets (Go-back-N)
      */
       sock->dup_ack_count = 0;
+      printf("timing out\n");
 
       /* Reno timeout reaction */
       sock->slow_start_thresh = sock->cong_win / 2;
@@ -473,7 +474,12 @@
   uint32_t in_flight = sock->send_win.last_sent - sock->send_win.last_ack;
   uint32_t win_limit = MIN(sock->cong_win, sock->send_adv_win);
 
-  if (in_flight >= win_limit) return;                 /* window full */
+  if (in_flight >= win_limit) { // window full
+    // Reset last_sent to last_ack so that the segment starting at last_ack+1 is retransmitted.
+    sock->send_win.last_sent = sock->send_win.last_ack;
+    printf("window full\n");
+    return;
+  }           
 
   uint32_t usable = win_limit - in_flight;
 
@@ -520,7 +526,7 @@
       sendto(sockfd, msg, plen, 0,
              (struct sockaddr *)&(sock->conn), conn_len);
       
-      printf("Sending packet with %d SEQ\n", seq);       
+      printf("Sending packet with %d SEQ, window limit: %d\n", seq, win_limit);       
       print_window_information(sock);
       free(msg);
 
@@ -596,7 +602,7 @@
    void print_window_information(ut_socket_t *sock){
     if (sock->type == TCP_LISTENER){
       printf("--Receiving Window Data--\n");
-     printf("\tLast packet read: %d\n", sock->recv_win.last_read);
+      printf("\tLast packet read: %d\n", sock->recv_win.last_read);
       printf("\tnext packet expected: %d\n", sock->recv_win.next_expect);
       printf("\tLast packet recveived: %d\n", sock->recv_win.last_recv);
     }
