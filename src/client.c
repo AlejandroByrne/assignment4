@@ -17,22 +17,10 @@ void functionality(ut_socket_t *sock) {
   uint8_t buf[BUF_SIZE];
   int read;
   FILE *fp;
-
-  ut_write(sock, "Knock knock", 11);
-  read = ut_read(sock, buf, 200, NO_FLAG);
-  printf("R: %.*s\n", read, buf);
-  printf("N: %d\n", read);
-
-  ut_write(sock, "Client", 6);
-  read = ut_read(sock, buf, 200, NO_FLAG);
-  printf("R: %.*s\n", read, buf);
-  printf("N: %d\n", read);
-
-  ut_write(sock, "Client believe you’re still LISTENing — can I connect now?", 63);
-
+  
   sleep(1);
 
-  fp = fopen("tests/random.input", "rb");
+  fp = fopen("tests/test.txt", "r");
   if (fp == NULL) {
     perror("Error opening file");
     exit(EXIT_FAILURE);

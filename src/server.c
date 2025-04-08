@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include "ut_tcp.h"
 
@@ -24,39 +25,30 @@ void functionality(ut_socket_t *sock, int file_size_in_bytes) {
   FILE *fp;
   int n;
 
-  n = ut_read(sock, buf, BUF_SIZE, NO_FLAG);
-  printf("R: %.*s\n", n, buf);
-  printf("N: %d\n", n);
-  ut_write(sock, "Who's there?", 12);
-
-  n = ut_read(sock, buf, 200, NO_FLAG);
-  printf("R: %.*s\n", n, buf);
-  printf("N: %d\n", n);
-  ut_write(sock, "Client who?", 11);
-
-  n = ut_read(sock, buf, 200, NO_FLAG);
-  printf("R: %.*s\n", n, buf);
-  printf("N: %d\n", n);
-
-  if (access("tests/random.output", F_OK) == 0) {
-    remove("tests/random.output");
+  if (access("tests/output.txt", F_OK) == 0) {
+    remove("tests/output.txt");
   }
 
   printf("Writing output file...\n");
   int total_n = 0;
-  fp = fopen("tests/random.output", "a");
+  fp = fopen("tests/output.txt", "a");
+  assert(fp != NULL);
   for (int i = 0; i < 10000; i++) {
+    printf("i: %d n: %d\n", i, n);
     n = ut_read(sock, buf, BUF_SIZE, NO_FLAG);
     if (n > 0) {
+      printf("Bytes read: %d | %s\n", n, buf);
       fwrite(buf, n, 1, fp);
     }
     total_n += n;
     if (total_n >= file_size_in_bytes) {
+      printf("total n greater than file size\n");
       break;
     }
     printf("Num read bytes: %d\n", total_n);
-    usleep(100 * 1000);
+    sleep(1);
   }
+  printf("Closed file\n");
   fclose(fp);
 }
 

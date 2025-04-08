@@ -1,0 +1,16 @@
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. qwe82bncaZKLcn9283LKqplxnv. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua! Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+aB3cD#4EfGh!IjKlMnOpQrStUvWxYz1234567890 — test payload with symbols and numbers. 
+RandomChunk_001: "The quick brown fox jumps over 13 lazy dogs, repeatedly, in a loop." 
+This is a sentence. This is another one, slightly longer than the last. Here comes a short. Another longer sentence with commas, semicolons; and maybe even — a dash?
+RANDOM_TOKEN_BLOCK:
+  fj2$#fJQ3xLK!29dkmDSSakl+_293kdlaQm==END
+Here’s a JSON-style blob:
+{
+  "user": "test_user",
+  "auth": false,
+  "roles": ["guest", "viewer"],
+  "session": "9f8293a2-d13f-40f1-bbc3-00f82d3c789b"
+}
+Here’s some base64: SGVsbG8gdGhlcmUsIHRoaXMgaXMgYmFzZTY0Lg==
+Here’s some hex: 4a 6f 68 6e 20 44 6f 65 20 69 73 20 74 65 73 74
+End of stream marker: <<EOF123>>
