@@ -13,7 +13,12 @@
  
  #define BUF_SIZE 16000
 
- // RUN: UT_TCP_ADDR=10.1.1.3 UT_TCP_PORT=8000 UT_TCP_FILE_SIZE=809340 ./testing_server
+ // extra stuff:
+ // tcset eth0 --loss 0.1% --overwrite
+ // tcset eth0 --delay 50ms --overwrite  # Add packet delays for better visualization
+ // ./utils/capture_packets.sh start capture.pcap
+ // RUN: UT_TCP_ADDR=10.1.1.3 UT_TCP_PORT=8000 UT_TCP_FILE_SIZE=209433 ./testing_server
+ // ./utils/capture_packets.sh stop capture.pcap
  
  /*
   * Param: sock - used for reading and writing to a connection

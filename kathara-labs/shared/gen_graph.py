@@ -16,7 +16,7 @@ server_port = 8000
 num_packets = 0
 
 # This script assumes that only the client is sending data to the server.
-for packet in packets[]: # or do in packets[:100] or 1000, etc
+for packet in packets: # or do in packets[:100] or 1000, etc
     payload = packet[Raw].load
 
     if IP not in packet:
