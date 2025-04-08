@@ -196,6 +196,55 @@
    * Send an acknowledgment if the packet arrives in order:
      * Use the `send_empty` function to send the acknowledgment.
    */
+
+   ut_tcp_header_t *hdr = (ut_tcp_header_t *)pkt;
+
+    /* ----------- extract lengths and pointers --------------------- */
+    uint32_t seq  = get_seq(hdr);               /* first byte of payload */
+    uint16_t plen = get_plen(hdr);
+    uint16_t hlen = get_hlen(hdr);
+    uint16_t dlen = plen - hlen;                /* payload size         */
+
+    if (dlen == 0) {                            /* nothing to store     */
+        send_empty(sock, ACK_FLAG_MASK, false, false);
+        return;
+    }
+
+    /* ----------- calculate where this data belongs ---------------- */
+    /* byte (last_read+1) is stored at offset 0 in received_buf */
+    uint32_t offset = seq - (sock->recv_win.last_read + 1);
+    uint32_t seg_end = seq + dlen - 1;
+    uint32_t needed  = offset + dlen;           /* bytes of buffer we’ll touch */
+
+    if (needed > MAX_NETWORK_BUFFER)            /* would overflow our buf */
+        return;                                 /* drop segment silently */
+
+    /* ----------- (re)allocate receive buffer if needed ------------ */
+    if (sock->received_buf == NULL) {
+        sock->received_buf = malloc(needed);
+        sock->received_len = 0;
+    } else if (needed > sock->received_len) {
+        sock->received_buf = realloc(sock->received_buf, needed);
+    }
+
+    /* ----------- copy payload into the right slot ----------------- */
+    memcpy(sock->received_buf + offset, pkt + hlen, dlen);
+
+    /* ----------- book‑keeping for window pointers ----------------- */
+    if (seg_end > sock->recv_win.last_recv)
+        sock->recv_win.last_recv = seg_end;
+
+    if (seq == sock->recv_win.next_expect) {
+        /* we just filled the next missing byte → advance contiguous run */
+        sock->recv_win.next_expect = seg_end + 1;
+    }
+
+    if (needed > sock->received_len)
+        sock->received_len = needed;
+
+    /* ----------- send cumulative ACK back to the peer ------------- */
+    send_empty(sock, ACK_FLAG_MASK, false, false);
+
  }
 
  void handle_pkt(ut_socket_t *sock, uint8_t *pkt)
@@ -220,6 +269,25 @@
          * If the ACK is for a new sequence, update the send window and congestion control (call `handle_ack`).
      * Update the receive buffer (call `update_received_buf`).
      */
+
+    /* ---------------------------------------------------------------
+       2.  Flow‑control: remember the peer’s advertised window.
+       --------------------------------------------------------------- */
+    sock->send_adv_win = get_advertised_window(hdr);
+
+    /* ---------------------------------------------------------------
+       3.  ACK processing (data‑path only, FIN ignored for now).
+       --------------------------------------------------------------- */
+    if (flags & ACK_FLAG_MASK) {
+        handle_ack(sock, hdr);          /* will deal with new vs. dup ACKs */
+    }
+
+    /* ---------------------------------------------------------------
+       4.  Payload (and cumulative‑ACK generation on our side).
+           Even if the segment carries *no* payload, calling the helper
+           is harmless—it will notice dlen == 0 and return.
+       --------------------------------------------------------------- */
+    update_received_buf(sock, pkt);
  }
 
  void recv_pkts(ut_socket_t *sock)
@@ -324,6 +392,65 @@
        * Refer to the send_empty function for guidance on creating and sending packets.
      * Update the last sent sequence number after each packet is sent.
    */
+
+  // in order to calculate the available window size for sending data, we have to know how much data is currently in flight
+  uint32_t in_flight = sock->send_win.last_sent - sock->send_win.last_ack;
+  uint32_t win_limit = MIN(sock->cong_win, sock->send_adv_win);
+
+  if (in_flight >= win_limit) return;                 /* window full */
+
+  uint32_t usable = win_limit - in_flight;
+
+  /* unsent bytes start right after the in‑flight region inside sending_buf */
+  uint32_t unsent_off = in_flight;
+  uint32_t unsent_len = (sock->sending_len > unsent_off)
+                        ? (sock->sending_len - unsent_off)
+                        : 0;
+
+  if (unsent_len == 0) return;                        /* nothing buffered */
+
+  uint8_t  *payload_ptr = sock->sending_buf + unsent_off;
+  uint32_t  to_push     = MIN(usable, unsent_len);
+
+  /* ------------------------------------------------------------------
+     2.  Send as many MSS‑sized chunks as fit into ‘to_push’
+     ------------------------------------------------------------------ */
+  size_t   conn_len = sizeof(sock->conn);
+  int      sockfd   = sock->socket;
+
+  while (to_push > 0) {
+      uint16_t seg_len = (uint16_t)MIN(MSS, to_push);
+
+      /* header fields */
+      uint16_t src = sock->my_port;
+      uint16_t dst = ntohs(sock->conn.sin_port);
+
+      uint32_t seq = sock->send_win.last_sent + 1;    /* next byte to send */
+      uint32_t ack = sock->recv_win.next_expect;      /* piggy‑back ACK   */
+
+      uint16_t hlen = sizeof(ut_tcp_header_t);
+      uint16_t plen = hlen + seg_len;
+      uint8_t  flags = ACK_FLAG_MASK;                 /* data + cumulative ACK */
+
+      uint16_t adv_window =
+          MAX(MSS, MAX_NETWORK_BUFFER - sock->received_len);
+
+      /* craft packet */
+      uint8_t *msg = create_packet(src, dst, seq, ack,
+                                   hlen, plen, flags,
+                                   adv_window,
+                                   payload_ptr, seg_len);
+
+      sendto(sockfd, msg, plen, 0,
+             (struct sockaddr *)&(sock->conn), conn_len);
+      free(msg);
+
+      /* bookkeeping -------------------------------------------------- */
+      sock->send_win.last_sent += seg_len;            /* extend in‑flight */
+      payload_ptr               += seg_len;
+      to_push                   -= seg_len;
+  }
+   
  }
 
  void send_pkts(ut_socket_t *sock)
