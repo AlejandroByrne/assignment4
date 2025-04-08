@@ -34,10 +34,9 @@ void functionality(ut_socket_t *sock, int file_size_in_bytes) {
   fp = fopen("tests/output.txt", "a");
   assert(fp != NULL);
   for (int i = 0; i < 10000; i++) {
-    printf("i: %d n: %d\n", i, n);
     n = ut_read(sock, buf, BUF_SIZE, NO_FLAG);
     if (n > 0) {
-      printf("Bytes read: %d | %s\n", n, buf);
+      // printf("Bytes read: %d | %s\n", n, buf);
       fwrite(buf, n, 1, fp);
     }
     total_n += n;
@@ -45,7 +44,7 @@ void functionality(ut_socket_t *sock, int file_size_in_bytes) {
       printf("total n greater than file size\n");
       break;
     }
-    printf("Num read bytes: %d\n", total_n);
+    // printf("Num read bytes: %d\n", total_n);
     sleep(1);
   }
   printf("Closed file\n");

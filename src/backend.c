@@ -287,6 +287,7 @@
            Even if the segment carries *no* payload, calling the helper
            is harmless—it will notice dlen == 0 and return.
        --------------------------------------------------------------- */
+    printf("");
     update_received_buf(sock, pkt);
  }
 
